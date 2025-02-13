@@ -91,19 +91,40 @@ def predict_regions(image_path, annotations_file):
     # Process each region with OCR and build predictions
     for idx, (region_image, coords) in enumerate(regions_processed):
         region_np = np.array(region_image)
-        # Run easyocr on the region
+        # Run easyocr on the processed region
         results = reader.readtext(region_np)
         if results:
-            # Select the prediction with the highest confidence
             best = max(results, key=lambda x: x[2])
             text = best[1].strip()
             conf = best[2]
+            final_image = region_image  # final image is the original preprocessed one
         else:
-            text = ""
-            conf = 0.0
+            # Fallback strategy: invert the image and retry OCR
+            from PIL import ImageOps
+            fallback = region_image.copy().convert("L")
+            fallback = ImageOps.invert(fallback)
+            fallback = fallback.convert("RGB")
+            results_alt = reader.readtext(np.array(fallback))
+            if results_alt:
+                best = max(results_alt, key=lambda x: x[2])
+                text = best[1].strip() + " [inv]"
+                conf = best[2]
+                final_image = fallback  # final image is the inverted fallback
+            else:
+                text = ""
+                conf = 0.0
+                final_image = region_image  # keep original if no detection
 
-        # Inside your loop after processing each region (for debugging):
+        # Post-process OCR result: if text (ignoring any fallback marker) consists entirely of a repeated character, collapse it.
+        marker = " [inv]" if "[inv]" in text else ""
+        base_text = text.replace(" [inv]", "")
+        if base_text and len(set(base_text)) == 1 and len(base_text) > 1:
+            text = base_text[0] + marker
+
+        # Save debug image (optional)
         region_image.save(f"debug_region_{idx+1}.png")
+        # Save final debug image for further analysis
+        final_image.save(f"debug_final_region_{idx+1}.png")
 
         predictions.append({
             'region_index': idx,
