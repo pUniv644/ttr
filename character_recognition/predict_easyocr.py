@@ -81,18 +81,22 @@ def predict_regions(image_path, annotations_file):
 
     # Display preprocessed regions using matplotlib before OCR prediction
     import matplotlib.pyplot as plt
+    import math
     n = len(regions_processed)
-    fig, axes = plt.subplots(n, 1, figsize=(5, 3 * n))
-    if n == 1:  # Ensure axes is iterable
-        axes = [axes]
+    cols = 3
+    rows = math.ceil(n / cols)
+    fig, axes = plt.subplots(rows, cols, figsize=(5 * cols, 3 * rows))
+    # Flatten axes in case of multi-dimensional array
+    axes = axes.flatten() if n > 1 else [axes]
     for i, ax in enumerate(axes):
-        img, coords = regions_processed[i]
-        ax.imshow(np.array(img))
-        ax.set_title(f"Region {i+1}: Position: {coords}")
+        if i < n:
+            img, coords = regions_processed[i]
+            ax.imshow(np.array(img))
+            ax.set_title(f"Region {i+1}: {coords}")
         ax.axis('off')
     plt.tight_layout()
     plt.show()
-
+    
     # Process each region with OCR and build predictions
     for idx, (region_image, coords) in enumerate(regions_processed):
         region_np = np.array(region_image)
@@ -126,9 +130,8 @@ def predict_regions(image_path, annotations_file):
         if base_text and len(set(base_text)) == 1 and len(base_text) > 1:
             text = base_text[0] + marker
 
-        # Save debug image (optional)
+        # Save debug images (optional)
         region_image.save(f"debug_region_{idx+1}.png")
-        # Save final debug image for further analysis
         final_image.save(f"debug_final_region_{idx+1}.png")
 
         predictions.append({
@@ -150,7 +153,38 @@ def predict_regions(image_path, annotations_file):
         mark = "✓" if predicted_text == actual else "✗"
         print(f"{idx+1:<6} | {predicted_text:<9} | {actual:<6} | {conf_percent:<10} {mark}")
 
+    # Combine predictions into a final result without hard coding characters
+    # Mapping: die_no = region1 + region2, day = region3 + region4, shift = region5, year = region6, month = region7
+    if len(predictions) >= 7:
+        # Remove any fallback markers from the final result fields.
+        final_result = {
+            "die_no": (predictions[0]['prediction'] + predictions[1]['prediction']).replace(" [inv]", ""),
+            "day": (predictions[2]['prediction'] + predictions[3]['prediction']).replace(" [inv]", ""),
+            "shift": predictions[4]['prediction'].replace(" [inv]", ""),
+            "year": predictions[5]['prediction'].replace(" [inv]", ""),
+            "month": predictions[6]['prediction'].replace(" [inv]", "")
+        }
+        combined_string = (
+            final_result["die_no"]
+            + "#" + final_result["day"]
+            + "#" + final_result["shift"]
+            + "#" + final_result["year"]
+            + "#" + final_result["month"]
+        )
+        print("\nFinal Result:")
+        print(combined_string)
+        print("\nJSON Output:")
+        json_output = json.dumps(final_result, indent=4)
+        print(json_output)
+        
+        # Save the JSON output to a file
+        with open("output.json", "w") as f:
+            f.write(json_output)
+    else:
+        print("Not enough predictions to form final result.")
+
     return predictions
+
 
 if __name__ == "__main__":
     image_path = r"D:\hik\hik3\Image_w4024_h3036_fn653.png"
