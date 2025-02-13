@@ -1,19 +1,19 @@
 import json
 import os
-from PIL import Image, ImageEnhance
+from PIL import Image, ImageEnhance, ImageFilter
 import numpy as np
 import easyocr
 
 def preprocess_region(image):
-    # Convert image to grayscale if needed
-    if image.mode != 'L':
-        image = image.convert('L')
-    # Enhance contrast moderately
-    enhancer = ImageEnhance.Contrast(image)
-    image = enhancer.enhance(1.5)  # lowered factor
-    # Option: comment out binary thresholding to preserve details
-    # image = image.point(lambda p: 255 if p > 128 else 0)
-    return image
+    # Convert to grayscale then back to RGB
+    gray = image.convert("L")
+    # Increase contrast more aggressively
+    enhanced = ImageEnhance.Contrast(gray).enhance(2.0)
+    # Optionally apply a slight smoothing if needed
+    sharpened = enhanced.filter(ImageFilter.SHARPEN)
+    # Convert back to RGB so that easyOCR receives expected format
+    result = sharpened.convert("RGB")
+    return result
 
 def predict_regions(image_path, annotations_file):
     # Load annotations
@@ -67,11 +67,11 @@ def predict_regions(image_path, annotations_file):
         width += 2 * padding
         height += 2 * padding
 
-        # Crop and preprocess region
+        # Crop and preprocess region; no conversion to grayscale
         region_image = original_image.crop((x, y, x + width, y + height))
         region_image = preprocess_region(region_image)
-        # Convert the grayscale image back to RGB
-        region_image = region_image.convert('RGB')
+        # Remove the line below if your image is already in RGB:
+        # region_image = region_image.convert('RGB')
         regions_processed.append((region_image, (x, y, width, height)))
 
     # Display preprocessed regions using matplotlib before OCR prediction
