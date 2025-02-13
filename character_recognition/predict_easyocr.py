@@ -103,8 +103,9 @@ def predict_regions(image_path, annotations_file):
         candidates = []
         confidences = []
         
-        # Attempt 1: Original preprocessed image
-        region_np = np.array(region_image)
+        # Attempt 1: Original preprocessed image (optionally upscaled)
+        upscaled = region_image.resize((int(region_image.width * 1.5), int(region_image.height * 1.5)))
+        region_np = np.array(upscaled)
         results1 = reader.readtext(region_np)
         if results1:
             best1 = max(results1, key=lambda x: x[2])
@@ -112,9 +113,9 @@ def predict_regions(image_path, annotations_file):
             candidates.append(cand1)
             confidences.append(best1[2])
         
-        # Attempt 2: Inverted image
+        # Attempt 2: Inverted image (also upscaled)
         from PIL import ImageOps
-        inverted = region_image.copy().convert("L")
+        inverted = upscaled.convert("L")
         inverted = ImageOps.invert(inverted)
         inverted = inverted.convert("RGB")
         results2 = reader.readtext(np.array(inverted))
@@ -124,8 +125,11 @@ def predict_regions(image_path, annotations_file):
             candidates.append(cand2)
             confidences.append(best2[2])
         
-        # Attempt 3: Binarized (thresholded) image
-        binarized = region_image.convert("L").point(lambda p: 255 if p > 128 else 0, mode="1")
+        # Attempt 3: Binarized image with adaptive thresholding
+        # Here we use a simple adaptive method using PIL's point() based on mean brightness.
+        gray = upscaled.convert("L")
+        mean_val = np.mean(np.array(gray))
+        binarized = gray.point(lambda p: 255 if p > mean_val else 0, mode="1")
         binarized = binarized.convert("RGB")
         results3 = reader.readtext(np.array(binarized))
         if results3:
@@ -181,30 +185,92 @@ def predict_regions(image_path, annotations_file):
     # Combine predictions into a final result without hard coding characters
     # Mapping: die_no = region1 + region2, day = region3 + region4, shift = region5, year = region6, month = region7
     if len(predictions) >= 7:
-        # Remove any fallback markers from the final result fields.
+        # Remove any fallback markers from the final result fields and trim spaces.
         final_result = {
-            "die_no": (predictions[0]['prediction'] + predictions[1]['prediction']).replace(" [inv]", ""),
-            "day": (predictions[2]['prediction'] + predictions[3]['prediction']).replace(" [inv]", ""),
-            "shift": predictions[4]['prediction'].replace(" [inv]", ""),
-            "year": predictions[5]['prediction'].replace(" [inv]", ""),
-            "month": predictions[6]['prediction'].replace(" [inv]", "")
+            "die_no": (predictions[0]['prediction'] + predictions[1]['prediction']).replace(" [inv]", "").strip(),
+            "day": (predictions[2]['prediction'] + predictions[3]['prediction']).replace(" [inv]", "").strip(),
+            "shift": predictions[4]['prediction'].replace(" [inv]", "").strip(),
+            "year": predictions[5]['prediction'].replace(" [inv]", "").strip(),
+            "month": predictions[6]['prediction'].replace(" [inv]", "").strip()
         }
-        combined_string = (
-            final_result["die_no"]
-            + "#" + final_result["day"]
-            + "#" + final_result["shift"]
-            + "#" + final_result["year"]
-            + "#" + final_result["month"]
-        )
-        print("\nFinal Result:")
-        print(combined_string)
-        print("\nJSON Output:")
-        json_output = json.dumps(final_result, indent=4)
-        print(json_output)
         
-        # Save the JSON output to a file
-        with open("output.json", "w") as f:
-            f.write(json_output)
+        # Helper: print red text
+        def red(text):
+            return "\033[91m" + text + "\033[0m"
+        
+        # Helper functions to enforce expected formats.
+        def validate_day(day_str):
+            digits = ''.join(filter(str.isdigit, day_str))
+            if not digits:
+                print(red(f"Day validation failed: '{day_str}' contains no digits."))
+                return None
+            if len(digits) == 1:
+                digits = "0" + digits
+            try:
+                d = int(digits)
+            except ValueError:
+                print(red(f"Day validation failed: unable to convert '{digits}' to integer."))
+                return None
+            if not (1 <= d <= 31):
+                print(red(f"Day validation failed: {d} is out of range (1-31)."))
+                return None
+            return f"{d:02d}"
+        
+        def validate_shift(shift_str):
+            letter = shift_str.upper()
+            if letter not in ["A", "B", "C"]:
+                print(red(f"Shift validation failed: '{shift_str}' is invalid; expected A, B, or C."))
+                return None
+            return letter
+        
+        def validate_year(year_str):
+            digits = ''.join(filter(str.isdigit, year_str))
+            if not digits:
+                print(red(f"Year validation failed: '{year_str}' contains no digits."))
+                return None
+            candidate = digits[-1]
+            if candidate not in "0123456789":
+                print(red(f"Year validation failed: '{candidate}' is not a valid digit."))
+                return None
+            return candidate
+        
+        def validate_month(month_str):
+            letter = month_str.upper()
+            if letter not in list("ABCDEFGHIJKL"):
+                print(red(f"Month validation failed: '{month_str}' is invalid; expected A-L."))
+                return None
+            return letter
+        
+        # Validate each field.
+        valid_day = validate_day(final_result["day"])
+        valid_shift = validate_shift(final_result["shift"])
+        valid_year = validate_year(final_result["year"])
+        valid_month = validate_month(final_result["month"])
+        
+        if None in (valid_day, valid_shift, valid_year, valid_month):
+            print(red("Validation error: one or more fields are invalid. JSON output will not be saved."))
+        else:
+            final_result["day"] = valid_day
+            final_result["shift"] = valid_shift
+            final_result["year"] = valid_year
+            final_result["month"] = valid_month
+            
+            combined_string = (
+                final_result["die_no"]
+                + "#" + final_result["day"]
+                + "#" + final_result["shift"]
+                + "#" + final_result["year"]
+                + "#" + final_result["month"]
+            )
+            print("\nFinal Result:")
+            print(combined_string)
+            print("\nJSON Output:")
+            json_output = json.dumps(final_result, indent=4)
+            print(json_output)
+            
+            # Save the JSON output to a file
+            with open("output.json", "w") as f:
+                f.write(json_output)
     else:
         print("Not enough predictions to form final result.")
 
