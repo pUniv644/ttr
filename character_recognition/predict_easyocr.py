@@ -34,7 +34,12 @@ def predict_regions(image_path, annotations_file):
             annotation_key = key
             break
     if annotation_key is None:
-        raise ValueError(f"No annotation found for image: {image_filename}")
+        print(f"Warning: No annotation found for image: {image_filename}.")
+        if annotations:
+            annotation_key = next(iter(annotations))
+            print(f"Using annotation for image: {annotations[annotation_key]['filename']}")
+        else:
+            raise ValueError("No annotations provided in file.")
 
     regions = annotations[annotation_key]['regions']
     predictions = []
@@ -148,7 +153,7 @@ def predict_regions(image_path, annotations_file):
     return predictions
 
 if __name__ == "__main__":
-    image_path = "data/images/Image_w4024_h3036_fn1.png"
+    image_path = r"D:\hik\hik3\Image_w4024_h3036_fn653.png"
     annotations_file = "data/annotations/annotations.json"
     
     try:
