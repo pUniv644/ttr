@@ -1,0 +1,4 @@
+keras-ocr
+Pillow>=8.0.0
+numpy>=1.21.0
+tensorflow>=2.9.0  # GPU version of TensorFlow (ensure proper CUDA/cuDNN installation)

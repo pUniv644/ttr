@@ -1,0 +1,79 @@
+{
+    "Image_w4024_h3036_fn1.png19435857": {
+        "filename": "Image_w4024_h3036_fn1.png",
+        "size": 19435857,
+        "regions": [
+            {
+                "shape_attributes": {
+                    "name": "rect",
+                    "x": 1720,
+                    "y": 1444,
+                    "width": 194,
+                    "height": 262
+                },
+                "region_attributes": {}
+            },
+            {
+                "shape_attributes": {
+                    "name": "rect",
+                    "x": 1926,
+                    "y": 1441,
+                    "width": 138,
+                    "height": 264
+                },
+                "region_attributes": {}
+            },
+            {
+                "shape_attributes": {
+                    "name": "rect",
+                    "x": 2359,
+                    "y": 1330,
+                    "width": 128,
+                    "height": 196
+                },
+                "region_attributes": {}
+            },
+            {
+                "shape_attributes": {
+                    "name": "rect",
+                    "x": 2500,
+                    "y": 1330,
+                    "width": 116,
+                    "height": 204
+                },
+                "region_attributes": {}
+            },
+            {
+                "shape_attributes": {
+                    "name": "rect",
+                    "x": 2414,
+                    "y": 1554,
+                    "width": 186,
+                    "height": 219
+                },
+                "region_attributes": {}
+            },
+            {
+                "shape_attributes": {
+                    "name": "rect",
+                    "x": 3315,
+                    "y": 1423,
+                    "width": 146,
+                    "height": 236
+                },
+                "region_attributes": {}
+            },
+            {
+                "shape_attributes": {
+                    "name": "rect",
+                    "x": 3466,
+                    "y": 1423,
+                    "width": 151,
+                    "height": 229
+                },
+                "region_attributes": {}
+            }
+        ],
+        "file_attributes": {}
+    }
+}
