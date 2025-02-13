@@ -98,46 +98,71 @@ def predict_regions(image_path, annotations_file):
     plt.show()
     
     # Process each region with OCR and build predictions
+    from collections import Counter
     for idx, (region_image, coords) in enumerate(regions_processed):
+        candidates = []
+        confidences = []
+        
+        # Attempt 1: Original preprocessed image
         region_np = np.array(region_image)
-        # Run easyocr on the processed region
-        results = reader.readtext(region_np)
-        if results:
-            best = max(results, key=lambda x: x[2])
-            text = best[1].strip()
-            conf = best[2]
-            final_image = region_image  # final image is the original preprocessed one
-        else:
-            # Fallback strategy: invert the image and retry OCR
-            from PIL import ImageOps
-            fallback = region_image.copy().convert("L")
-            fallback = ImageOps.invert(fallback)
-            fallback = fallback.convert("RGB")
-            results_alt = reader.readtext(np.array(fallback))
-            if results_alt:
-                best = max(results_alt, key=lambda x: x[2])
-                text = best[1].strip() + " [inv]"
-                conf = best[2]
-                final_image = fallback  # final image is the inverted fallback
+        results1 = reader.readtext(region_np)
+        if results1:
+            best1 = max(results1, key=lambda x: x[2])
+            cand1 = best1[1].strip()
+            candidates.append(cand1)
+            confidences.append(best1[2])
+        
+        # Attempt 2: Inverted image
+        from PIL import ImageOps
+        inverted = region_image.copy().convert("L")
+        inverted = ImageOps.invert(inverted)
+        inverted = inverted.convert("RGB")
+        results2 = reader.readtext(np.array(inverted))
+        if results2:
+            best2 = max(results2, key=lambda x: x[2])
+            cand2 = best2[1].strip()
+            candidates.append(cand2)
+            confidences.append(best2[2])
+        
+        # Attempt 3: Binarized (thresholded) image
+        binarized = region_image.convert("L").point(lambda p: 255 if p > 128 else 0, mode="1")
+        binarized = binarized.convert("RGB")
+        results3 = reader.readtext(np.array(binarized))
+        if results3:
+            best3 = max(results3, key=lambda x: x[2])
+            cand3 = best3[1].strip()
+            candidates.append(cand3)
+            confidences.append(best3[2])
+        
+        # Clean candidates (remove any fallback markers)
+        cleaned_candidates = [cand.replace(" [inv]", "") for cand in candidates]
+        # Use majority vote if available; otherwise choose the candidate with highest confidence.
+        counter = Counter(cleaned_candidates)
+        if counter:
+            majority_candidate, count = counter.most_common(1)[0]
+            if count >= 2:
+                final_text = majority_candidate
             else:
-                text = ""
-                conf = 0.0
-                final_image = region_image  # keep original if no detection
+                final_text = cleaned_candidates[confidences.index(max(confidences))]
+        else:
+            final_text = ""
+        
+        # Set final confidence as max confidence among attempts (if available)
+        conf = max(confidences) if confidences else 0.0
 
-        # Post-process OCR result: if text (ignoring any fallback marker) consists entirely of a repeated character, collapse it.
-        marker = " [inv]" if "[inv]" in text else ""
-        base_text = text.replace(" [inv]", "")
-        if base_text and len(set(base_text)) == 1 and len(base_text) > 1:
-            text = base_text[0] + marker
+        # Additional post-process: collapse repeated characters (if any)
+        if final_text and len(set(final_text)) == 1 and len(final_text) > 1:
+            final_text = final_text[0]
 
         # Save debug images (optional)
         region_image.save(f"debug_region_{idx+1}.png")
-        final_image.save(f"debug_final_region_{idx+1}.png")
+        inverted.save(f"debug_inverted_region_{idx+1}.png")
+        binarized.save(f"debug_binarized_region_{idx+1}.png")
 
         predictions.append({
             'region_index': idx,
             'coordinates': {'x': coords[0], 'y': coords[1], 'width': coords[2], 'height': coords[3]},
-            'prediction': text,
+            'prediction': final_text,
             'confidence': conf
         })
 
@@ -187,7 +212,7 @@ def predict_regions(image_path, annotations_file):
 
 
 if __name__ == "__main__":
-    image_path = r"D:\hik\hik3\Image_w4024_h3036_fn653.png"
+    image_path = r"D:\hik\hik3\Image_w4024_h3036_fn692.png"
     annotations_file = "data/annotations/annotations.json"
     
     try:
